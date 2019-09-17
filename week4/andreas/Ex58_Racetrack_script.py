@@ -248,7 +248,7 @@ class OnPolicyMonteCarloAgent:
                 self.R[state_action_key].append(G)
                 self.Q[state_action_key] = np.average(self.R[state_action_key])
 
-            # Q-diff
+            # Q-diff: Credit to Joakim Blach Andersen
             Q_diff = abs(old_Q - self.Q)
             print('Q-diff: {}'.format(np.max(Q_diff)))
 
