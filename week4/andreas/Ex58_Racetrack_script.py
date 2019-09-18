@@ -77,6 +77,7 @@ class RaceTrack:
             return self.random_start_state(), 0, True
         if self.crossed_track_boundary(path):
             # if self.crossed_track_boundary([(next_y_coord, next_x_coord)]):
+            plt.clf()
             return self.random_start_state(), -1, False
 
         return np.array([next_y_coord, next_x_coord, next_y_vel, next_x_vel]), -1, False
@@ -110,9 +111,6 @@ class RaceTrack:
 
     def draw(self, car_cell=None, path=[]):
         colors = ['black', 'white', 'yellow', 'red']
-
-        fig = plt.figure(figsize=(10, 10), dpi=80,
-                         facecolor='w', edgecolor='k')
 
         im = plt.imshow(self.track, cmap=ListedColormap(colors),
                         origin='lower', interpolation='none', animated=True)
@@ -213,7 +211,9 @@ class OnPolicyMonteCarloAgent:
             a = self.sample_random_action(St)
             A.append(a)
 
-            # self.track.draw(car_cell=(St[0], St[1]))
+            self.track.draw(car_cell=(St[0], St[1]))
+            plt.pause(0.0001)
+            plt.draw()
 
             next_state, reward, terminated = self.track.apply_action(St, a)
 
@@ -295,4 +295,6 @@ class OnPolicyMonteCarloAgent:
 rt = RaceTrack.from_csv("../racetracks/map1.csv")
 
 agent = OnPolicyMonteCarloAgent(rt, n_episodes=1000)
+plt.ion()
+fig = plt.figure(figsize=(10, 10), dpi=80, facecolor='w', edgecolor='k')
 agent.policy_iteration()
