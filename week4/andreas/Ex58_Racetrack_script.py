@@ -7,6 +7,7 @@ import os
 import time
 import math
 import sys
+# import pygame
 
 CELL_TYPE_WALL = 0
 CELL_TYPE_TRACK = 1
@@ -153,8 +154,8 @@ class OnPolicyMonteCarloAgent:
         xacc_range = 3  # -1, 0, +1
 
         # Initialize state-action values
-        self.Q = np.zeros((y_range, x_range, yvel_range,
-                           xvel_range, yacc_range, xacc_range))
+        self.Q = np.full((y_range, x_range, yvel_range,
+                          xvel_range, yacc_range, xacc_range), np.nan)
 
         # Initialize rewards dictionary
         self.R = defaultdict(list)
@@ -175,11 +176,13 @@ class OnPolicyMonteCarloAgent:
     def sample_random_action(self, state):
         # Sample action according to our eps-greedy policy
         # Ensure that probabilities we sample from sum to 1
-        actionprobs = self.pi[tuple(state)]
+        y_coord, x_coord, y_vel, x_vel = state
+
+        actionprobs = self.pi[y_coord, x_coord, y_vel, x_vel]
         total_prob = np.sum(actionprobs)
-        if not math.isclose(total_prob, 1, abs_tol=0.1):
+        if not math.isclose(total_prob, 1, abs_tol=0.01):
             print(
-                'Action probabilities must sum to 1.0, but summed to {}'.format(total_prob))
+                'Action probabilities must sum to 1.0, but summed to {}, state: {}, actionprobs: {}'.format(total_prob, state, self.pi[tuple(state)]))
             sys.exit(1)
 
         linear_idx = np.random.choice(
@@ -204,20 +207,25 @@ class OnPolicyMonteCarloAgent:
         while not terminated:
             St = S[t]
 
-            if t % 100 == 0:
+            if t % 10000 == 0:
                 print("Step: {}".format(t))
 
             a = self.sample_random_action(St)
             A.append(a)
+
+            # self.track.draw(car_cell=(St[0], St[1]))
 
             next_state, reward, terminated = self.track.apply_action(St, a)
 
             R.append(reward)
             S.append(next_state)
             t += 1
+
+            # time.sleep(1)
+        print("Terminated after {} steps".format(t))
         return S, A, R
 
-    def solve_track(self):
+    def policy_iteration(self):
         it = 0
         while it < self.n_episodes:
             print('Iteration {}'.format(it))
@@ -250,43 +258,40 @@ class OnPolicyMonteCarloAgent:
 
             # Q-diff: Credit to Joakim Blach Andersen
             Q_diff = abs(old_Q - self.Q)
-            print('Q-diff: {}'.format(np.max(Q_diff)))
+            print('Q-diff: {}'.format(np.nanmax(Q_diff)))
 
             # (c) Iterate over all states s and update the eps-greedy policy
             for s in S:
                 y, x, y_vel, x_vel = s
+
+                possible_actions = self.track.possible_actions(s)
+                for a in possible_actions:
+                    a_y, a_x = a
+
+                    self.pi[y, x, y_vel, x_vel, a_y, a_x] = self.eps / \
+                        len(possible_actions)
+
+                # Get index of best action
                 actionvals = self.Q[y, x, y_vel, x_vel]
+                a_max = np.unravel_index(
+                    np.nanargmax(actionvals), actionvals.shape)
+                a_max_y, a_max_x = a_max
 
-                # Get index of best action. However this is in positive only coordinates.
-                # In case the value is greater than the max allowed action we need to translate it back into
-                # negative coordinates
-                a_max = np.unravel_index(actionvals.argmax(), actionvals.shape)
-                a_max = tuple(acc if acc <= 1 else 1 - acc for acc in a_max)
+                self.pi[y, x, y_vel, x_vel, a_max_y, a_max_x] += 1 - self.eps
 
-                possible_actions = self.track.possible_actions(St)
-
-                a_max_prob = 1 - self.eps + self.eps/len(possible_actions)
-                a_non_max_prob = self.eps/len(possible_actions)
-                total_prob = a_max_prob + \
-                    len(possible_actions) * a_non_max_prob
-
-                if not math.isclose(total_prob, 1, abs_tol=0.1):
+                actionprobs = self.pi[y, x, y_vel, x_vel]
+                total_prob = np.sum(actionprobs)
+                if not math.isclose(total_prob, 1, abs_tol=0.01):
                     print(
-                        'Action probabilities must sum to 1.0, but summed to {}'.format(total_prob))
+                        'Action probabilities must sum to 1.0, but summed to {}, state: {}, actionprobs: {}'.format(total_prob, s, self.pi[y, x, y_vel, x_vel]))
                     sys.exit(1)
 
-                self.pi[y, x, y_vel, x_vel][a_max] = a_max_prob
-
-                a_not_max = [a for a in possible_actions if tuple(a) != a_max]
-                self.pi[y, x, y_vel, x_vel][tuple(
-                    zip(*a_not_max))] = a_non_max_prob
-
             # Counter and update epsilon
-            self.epsilon = 1/(1 + int(it/4))
+            self.eps = 1/(1 + int(it/4))
             it += 1
 
 
 rt = RaceTrack.from_csv("../racetracks/map1.csv")
 
-agent = OnPolicyMonteCarloAgent(rt, n_episodes=3)
-S, A, R = agent.solve_track()
+agent = OnPolicyMonteCarloAgent(rt, n_episodes=1000)
+S, A, R = agent.policy_iteration()
