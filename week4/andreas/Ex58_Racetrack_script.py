@@ -154,8 +154,8 @@ class OnPolicyMonteCarloAgent:
         xacc_range = 3  # -1, 0, +1
 
         # Initialize state-action values
-        self.Q = np.full((y_range, x_range, yvel_range,
-                          xvel_range, yacc_range, xacc_range), np.nan)
+        self.Q = np.zeros((y_range, x_range, yvel_range,
+                           xvel_range, yacc_range, xacc_range))
 
         # Initialize rewards dictionary
         self.R = defaultdict(list)
@@ -258,7 +258,7 @@ class OnPolicyMonteCarloAgent:
 
             # Q-diff: Credit to Joakim Blach Andersen
             Q_diff = abs(old_Q - self.Q)
-            print('Q-diff: {}'.format(np.nanmax(Q_diff)))
+            print('Q-diff: {}'.format(np.max(Q_diff)))
 
             # (c) Iterate over all states s and update the eps-greedy policy
             for s in S:
@@ -272,10 +272,11 @@ class OnPolicyMonteCarloAgent:
                         len(possible_actions)
 
                 # Get index of best action
-                actionvals = self.Q[y, x, y_vel, x_vel]
-                a_max = np.unravel_index(
-                    np.nanargmax(actionvals), actionvals.shape)
-                a_max_y, a_max_x = a_max
+                a_ys, a_xs = tuple(zip(*possible_actions))
+                actionvals = self.Q[y, x, y_vel,
+                                    x_vel, a_ys, a_xs]
+                a_max_idx = np.argmax(actionvals)
+                a_max_y, a_max_x = a_ys[a_max_idx], a_xs[a_max_idx]
 
                 self.pi[y, x, y_vel, x_vel, a_max_y, a_max_x] += 1 - self.eps
 
@@ -294,4 +295,4 @@ class OnPolicyMonteCarloAgent:
 rt = RaceTrack.from_csv("../racetracks/map1.csv")
 
 agent = OnPolicyMonteCarloAgent(rt, n_episodes=1000)
-S, A, R = agent.policy_iteration()
+agent.policy_iteration()
