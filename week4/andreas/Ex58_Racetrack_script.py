@@ -77,7 +77,6 @@ class RaceTrack:
             return self.random_start_state(), 0, True
         if self.crossed_track_boundary(path):
             # if self.crossed_track_boundary([(next_y_coord, next_x_coord)]):
-            plt.clf()
             return self.random_start_state(), -1, False
 
         return np.array([next_y_coord, next_x_coord, next_y_vel, next_x_vel]), -1, False
@@ -211,10 +210,6 @@ class OnPolicyMonteCarloAgent:
             a = self.sample_random_action(St)
             A.append(a)
 
-            self.track.draw(car_cell=(St[0], St[1]))
-            plt.pause(0.0001)
-            plt.draw()
-
             next_state, reward, terminated = self.track.apply_action(St, a)
 
             R.append(reward)
@@ -226,8 +221,9 @@ class OnPolicyMonteCarloAgent:
         return S, A, R
 
     def policy_iteration(self):
+        policy_stable = False
         it = 0
-        while it < self.n_episodes:
+        while not policy_stable or it < self.n_episodes:
             print('Iteration {}'.format(it))
 
             # (a) Generate an episode using pi
@@ -287,14 +283,17 @@ class OnPolicyMonteCarloAgent:
                         'Action probabilities must sum to 1.0, but summed to {}, state: {}, actionprobs: {}'.format(total_prob, s, self.pi[y, x, y_vel, x_vel]))
                     sys.exit(1)
 
+            # Check if convergence in case no number of episodes is set to 0
+            if self.n_episodes is 0:
+                if np.allclose(old_Q, self.Q, rtol=0.05):
+                    print("Policy iteration converged after {} episodes".format(it))
+                    policy_stable = True
+
             # Counter and update epsilon
             self.eps = 1/(1 + int(it/4))
             it += 1
 
 
 rt = RaceTrack.from_csv("../racetracks/map1.csv")
-
-agent = OnPolicyMonteCarloAgent(rt, n_episodes=1000)
-plt.ion()
-fig = plt.figure(figsize=(10, 10), dpi=80, facecolor='w', edgecolor='k')
+agent = OnPolicyMonteCarloAgent(rt, n_episodes=0)
 agent.policy_iteration()
