@@ -4,6 +4,8 @@ import os
 from collections import defaultdict
 from itertools import permutations, repeat
 import random
+import math
+import sys
 from numpy import random as numpy_random
 
 # Load map1
@@ -14,7 +16,7 @@ CELL_TYPE_START = 3
 
 
 class RaceTrack:
-    def __init__(self, track, zero_velocity_prob=0.9, max_vel=5, min_vel=0, gamma=0.95, epsilon=0.95):
+    def __init__(self, track, zero_velocity_prob=0.9, max_vel=5, min_vel=0, gamma=0.9, epsilon=0.9):
         self.track = track
         self.wall_cells = np.argwhere(track == CELL_TYPE_WALL)
         self.goal_cells = np.argwhere(track == CELL_TYPE_GOAL)
@@ -59,14 +61,30 @@ class RaceTrack:
             # Generate an episode
             G = self.generate_episode()
 
+            # print('\nOld Returns ')
+            # print('Returns  [0, 8, 0, 0, 1, 0]:',
+            #       len(self.Returns['[0, 8, 0, 0, 1, 0]']))
+            # print('Returns  [0, 8, 0, 0, 1, 1]:',
+            #       len(self.Returns['[0, 8, 0, 0, 1, 1]']))
+            # print('Returns  [0, 8, 0, 0, 0, 1]:',
+            #       len(self.Returns['[0, 8, 0, 0, 0, 1]']))
+
             # Append G  values to Returns
             for s_a in G.keys():
                 self.Returns[s_a].append(G[s_a])
 
-            print('\nOld Q-values ')
-            print('Q-value  [0, 8, 0, 0, 1, 0]:', self.q[0, 8, 0, 0, 1, 0])
-            print('Q-value  [0, 8, 0, 0, 1, 1]:', self.q[0, 8, 0, 0, 1, 1])
-            print('Q-value  [0, 8, 0, 0, 0, 1]:', self.q[0, 8, 0, 0, 0, 1])
+            # print('\n Returns ')
+            # print('Returns  [0, 8, 0, 0, 1, 0]:',
+            #       len(self.Returns['[0, 8, 0, 0, 1, 0]']))
+            # print('Returns  [0, 8, 0, 0, 1, 1]:',
+            #       len(self.Returns['[0, 8, 0, 0, 1, 1]']))
+            # print('Returns  [0, 8, 0, 0, 0, 1]:',
+            #       len(self.Returns['[0, 8, 0, 0, 0, 1]']))
+
+            # print('\nOld Q-values ')
+            # print('Q-value  [0, 8, 0, 0, 1, 0]:', self.q[0, 8, 0, 0, 1, 0])
+            # print('Q-value  [0, 8, 0, 0, 1, 1]:', self.q[0, 8, 0, 0, 1, 1])
+            # print('Q-value  [0, 8, 0, 0, 0, 1]:', self.q[0, 8, 0, 0, 0, 1])
 
             # Replace q-values with average returns.
             for s_a in self.Returns.keys():
@@ -89,15 +107,13 @@ class RaceTrack:
             self.update_policy(initialize=False)
 
             # Check if convergence
-            if np.allclose(old_policy, self.pi_probabilities, atol=0.0005):
+            if np.allclose(old_policy, self.pi_probabilities, atol=0.0001):
                 print('Policy iteration converged.')
                 policy_improvement = True
 
             # Counter and update epsilon
             self.epsilon = 1/(np.sqrt(k + 1.1))
 
-            if k > 150:
-                print('ok...')
             k += 1
 
     def generate_episode(self):
@@ -107,7 +123,8 @@ class RaceTrack:
         crossed_finishing_line = False
         position = self.random_start_position()
         first_occurence = defaultdict(int)
-#        all_remaining_positions = []
+
+        lookup = False
 
         step = 0
         while not crossed_finishing_line:
@@ -120,13 +137,11 @@ class RaceTrack:
                 first_occurence[str(position + action)] = step
                 if str(position + action) == '[0, 8, 0, 0, 1, 0]':
                     print('Visited:', '[0, 8, 0, 0, 1, 0]', 'in step', step)
-#                    all_remaining_positions = []
+                    lookup = True
                 if str(position + action) == '[0, 8, 0, 0, 1, 1]':
                     print('Visited:', '[0, 8, 0, 0, 1, 1]', 'in step', step)
                 if str(position + action) == '[0, 8, 0, 0, 0, 1]':
                     print('Visited:', '[0, 8, 0, 0, 0, 1]', 'in step', step)
-
-#            all_remaining_positions.append(position)
 
             # Old position
             old_position = position.copy()
@@ -154,17 +169,27 @@ class RaceTrack:
                 continue
 
             # Check if car is in is black cells (outside track)
-            new_grid_position = rt.track[position[0], position[1]]
+            new_grid_position = self.track[position[0], position[1]]
             if new_grid_position == 0:
                 #                print('Car hit track boundery!')
                 position = self.random_start_position()
                 continue
 
         print('Steps {}'.format(step))
-#        print(all_remaining_positions)
+
+        # if '[0, 8, 0, 0, 1, 0]' not in first_occurence.keys() and '[0, 8, 0, 0, 1, 1]' in first_occurence.keys():
+        #     print('ok...')
 
         G = self._get_G_values(
             first_occurence_dict=first_occurence, total_steps=step)
+
+        # if not lookup and G['[0, 8, 0, 0, 1, 0]'] == 0:
+        #     print('here..')
+
+#        print('lookup', lookup)
+        # print('[0, 8, 0, 0, 1, 0] Reward:',  G['[0, 8, 0, 0, 1, 0]'])
+        # print('[0, 8, 0, 0, 1, 1] Reward:',  G['[0, 8, 0, 0, 1, 1]'])
+        # print('[0, 8, 0, 0, 0, 1] Reward:',  G['[0, 8, 0, 0, 0, 1]'])
 
         return G
 
@@ -176,7 +201,7 @@ class RaceTrack:
 
         for y, x in check_grid_states:
             if y <= self.track.shape[0] - 1 and x <= self.track.shape[1] - 1:
-                grid_values.append(rt.track[y, x])
+                grid_values.append(self.track[y, x])
 
         # Goal cell type
         if 2 in grid_values:
@@ -199,41 +224,79 @@ class RaceTrack:
         """
         """
 
-        # Action coordinates in probability matrix
-        array = [[0, 0],
-                 [0, 1],
-                 [0, 2],
-                 [1, 0],
-                 [1, 1],
-                 [1, 2],
-                 [2, 0],
-                 [2, 1],
-                 [2, 2]]
+        # Sample action according to our eps-greedy policy
+        # Ensure that probabilities we sample from sum to 1
+        y_coord, x_coord, y_vel, x_vel = state
 
-        # Randomly pick action
-        idx = numpy_random.choice(range(9),
-                                  size=1,
-                                  p=rt.pi_probabilities[state[0], state[1], state[2], state[3]].flatten())
+        actionprobs = self.pi_probabilities[y_coord, x_coord, y_vel, x_vel]
+        total_prob = np.sum(actionprobs)
+        if not math.isclose(total_prob, 1, abs_tol=0.01):
+            print(
+                'Action probabilities must sum to 1.0, but summed to {}, state: {}, actionprobs: {}'.format(total_prob, state, self.pi[tuple(state)]))
+            sys.exit(1)
 
-        # Translate back to range -1, 1 and return result
-        return [acc if acc <= 1 else 1 - acc for acc in array[idx[0]]]
+        linear_idx = np.random.choice(
+            actionprobs.size, p=actionprobs.ravel())
+        a = np.unravel_index(linear_idx, actionprobs.shape)
+        # In case the value is greater than the max allowed action we need to translate it back into
+        # negative coordinates
+        a = [acc if acc <= 1 else 1 - acc for acc in a]
+
+        return a
+
+    def greedy_action(self, state):
+
+        # Find greedy action according to state-action values Q
+        Q_state = self.Q[tuple(state)].copy()
+        if not (Q_state == 0).all():
+            Q_state[Q_state == 0] = np.nan
+        a = np.unravel_index(np.nanargmax(Q_state, axis=None), Q_state.shape)
+        # In case the value is greater than the max allowed action we need to translate it back into
+        # negative coordinates
+        a = [acc if acc <= 1 else 1 - acc for acc in a]
+
+        return a
 
     def greedy_action(self, state, possible_actions):
         """
         """
 
+        # if state == [0, 8, 0, 0]:
+        #     print('HEY')
+
         greedy_action = possible_actions[0]
-        q_max = self.q[state[0],
-                       state[1],
-                       state[2],
-                       state[3],
-                       greedy_action[0],
-                       greedy_action[1]]
+
+        # Check if all q values are equal
+        all_equal = True
+        first_value = self.q[state[0], state[1], state[2],
+                             state[3], greedy_action[0], greedy_action[1]]
+        for action in possible_actions:
+            value = self.q[state[0], state[1], state[2],
+                           state[3], action[0], action[1]]
+            if value != first_value:
+                all_equal = False
+
+        if all_equal:
+            return None
+
+        # Find greedy action
+        for action in possible_actions:
+            q_temp = self.q[state[0],
+                            state[1],
+                            state[2],
+                            state[3],
+                            action[0],
+                            action[1]]
+            if q_temp < 0:
+                q_max = q_temp
+                greedy_action = possible_actions[0]
+                break
 
         for action in possible_actions:
             value = self.q[state[0], state[1], state[2],
                            state[3], action[0], action[1]]
-            if value > q_max:
+            # Only look among negative q-values (0 if it hasn't been assigned yet)
+            if value > q_max and value < 0:
                 q_max = value
                 greedy_action = action
 
@@ -243,10 +306,13 @@ class RaceTrack:
     def epsilon_soft_policy(self, action, greedy_action, all_state_actions):
         """
         """
-        if action == greedy_action:
-            return 1 - self.epsilon + self.epsilon/len(all_state_actions)
+        if greedy_action:
+            if action == greedy_action:
+                return 1 - self.epsilon + self.epsilon/len(all_state_actions)
 
-        return self.epsilon/len(all_state_actions)
+            return self.epsilon/len(all_state_actions)
+
+        return 1/len(all_state_actions)
 
     def random_start_position(self):
         """
@@ -287,7 +353,7 @@ class RaceTrack:
         """
 
         # Dict. w/ G for first occurence for each s, a pair.
-        G = defaultdict(int)
+        G = {}
 
         for key, val in first_occurence_dict.items():
             number_rewards = total_steps - val
@@ -325,6 +391,8 @@ class RaceTrack:
                                                       y_vel_change,
                                                       x_vel_change] = 1/len(possible_actions)
                         else:
+                            if [y_coord, x_coord, y_vel, x_vel] == [0, 8, 0, 0]:
+                                print('JA')
                             greedy_action = self.greedy_action(
                                 state=[y_coord, x_coord, y_vel, x_vel],
                                 possible_actions=possible_actions)
