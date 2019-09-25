@@ -14,7 +14,7 @@ CELL_TYPE_START = 3
 
 
 class RaceTrack:
-    def __init__(self, track, zero_velocity_prob=0.9, max_vel=5, min_vel=0, gamma=0.9, epsilon=0.9):
+    def __init__(self, track, zero_velocity_prob=0.9, max_vel=5, min_vel=0, gamma=0.95, epsilon=0.95):
         self.track = track
         self.wall_cells = np.argwhere(track == CELL_TYPE_WALL)
         self.goal_cells = np.argwhere(track == CELL_TYPE_GOAL)
@@ -59,23 +59,16 @@ class RaceTrack:
             # Generate an episode
             G = self.generate_episode()
 
-#            print('--EPSILON', self.epsilon)
-
-#             print('Append G to Returns(s, a)')
-#             if '[0, 8, 0, 0, 1, 0]' in G.keys():
-#                 print('G[0, 8, 0, 0, 1, 0]', G['[0, 8, 0, 0, 1, 0]'])
-#                 print('self.Returns[0, 8, 0, 0, 1, 0]', self.Returns['[0, 8, 0, 0, 1, 0]'])
+            # Append G  values to Returns
             for s_a in G.keys():
                 self.Returns[s_a].append(G[s_a])
-#             if '[0, 8, 0, 0, 1, 0]' in G.keys():
-#                 print('self.Returns[0, 8, 0, 0, 1, 0]', self.Returns['[0, 8, 0, 0, 1, 0]'])
 
-            # print('Calculate averages in Q(s, a):')
-            # print('Q-value  [0, 8, 0, 0, 1, 0]:', self.q[0, 8, 0, 0, 1, 0])
-            # print('Q-value  [0, 8, 0, 0, 1, 1]:', self.q[0, 8, 0, 0, 1, 1])
-            # print('Q-value  [0, 8, 0, 0, 0, 1]:', self.q[0, 8, 0, 0, 0, 1])
-            # print('Q-value  [0, 8, 0, 0, 0, -1]:', self.q[0, 8, 0, 0, 0, -1])
+            print('\nOld Q-values ')
+            print('Q-value  [0, 8, 0, 0, 1, 0]:', self.q[0, 8, 0, 0, 1, 0])
+            print('Q-value  [0, 8, 0, 0, 1, 1]:', self.q[0, 8, 0, 0, 1, 1])
+            print('Q-value  [0, 8, 0, 0, 0, 1]:', self.q[0, 8, 0, 0, 0, 1])
 
+            # Replace q-values with average returns.
             for s_a in self.Returns.keys():
                 self.q[eval(s_a)[0],
                        eval(s_a)[1],
@@ -83,22 +76,16 @@ class RaceTrack:
                        eval(s_a)[3],
                        eval(s_a)[4],
                        eval(s_a)[5]] = np.average(self.Returns[s_a])
-            # print('Q-value  [0, 8, 0, 0, 1, 0]:', self.q[0, 8, 0, 0, 1, 0])
-            # print('Q-value  [0, 8, 0, 0, 1, 1]:', self.q[0, 8, 0, 0, 1, 1])
-            # print('Q-value  [0, 8, 0, 0, 0, 1]:', self.q[0, 8, 0, 0, 0, 1])
-            # print('Q-value  [0, 8, 0, 0, 0, -1]:', self.q[0, 8, 0, 0, 0, -1])
+            print('\nUpdated Q-values')
+            print('Q-value  [0, 8, 0, 0, 1, 0]:', self.q[0, 8, 0, 0, 1, 0])
+            print('Q-value  [0, 8, 0, 0, 1, 1]:', self.q[0, 8, 0, 0, 1, 1])
+            print('Q-value  [0, 8, 0, 0, 0, 1]:', self.q[0, 8, 0, 0, 0, 1])
+            print('\n')
 
             # Old policy
             old_policy = self.pi_probabilities.copy()
 
             # Update pi(a | s)
-            self.pi_probabilities = self.update_policy(track=self.track,
-                                                       velocity_range=self.velocity_range,
-                                                       velocity_change_range=self.velocity_change_range,
-                                                       velocity_min=self.velocity_min,
-                                                       velocity_max=self.velocity_max,
-                                                       initialize=True)
-
             self.update_policy(initialize=False)
 
             # Check if convergence
@@ -109,6 +96,8 @@ class RaceTrack:
             # Counter and update epsilon
             self.epsilon = 1/(np.sqrt(k + 1.1))
 
+            if k > 150:
+                print('ok...')
             k += 1
 
     def generate_episode(self):
@@ -118,10 +107,10 @@ class RaceTrack:
         crossed_finishing_line = False
         position = self.random_start_position()
         first_occurence = defaultdict(int)
+#        all_remaining_positions = []
 
         step = 0
         while not crossed_finishing_line:
-            step += 1
 
             # Sample action
             action = self.sample_action_from_state(position)
@@ -129,6 +118,15 @@ class RaceTrack:
             # Initiate s, a pair if not already in dict
             if str(position + action) not in first_occurence.keys():
                 first_occurence[str(position + action)] = step
+                if str(position + action) == '[0, 8, 0, 0, 1, 0]':
+                    print('Visited:', '[0, 8, 0, 0, 1, 0]', 'in step', step)
+#                    all_remaining_positions = []
+                if str(position + action) == '[0, 8, 0, 0, 1, 1]':
+                    print('Visited:', '[0, 8, 0, 0, 1, 1]', 'in step', step)
+                if str(position + action) == '[0, 8, 0, 0, 0, 1]':
+                    print('Visited:', '[0, 8, 0, 0, 0, 1]', 'in step', step)
+
+#            all_remaining_positions.append(position)
 
             # Old position
             old_position = position.copy()
@@ -138,6 +136,9 @@ class RaceTrack:
             position[1] += position[3] + action[1]
             position[2] += action[0]
             position[3] += action[1]
+
+            # Update step
+            step += 1
 
             # Check if goal if reached (is it in the projected reactangle)
             grid_states_to_check = self.get_all_grid_cells_in_projected_retcangle(current_state=[old_position[0], old_position[1]],
@@ -149,14 +150,18 @@ class RaceTrack:
             # Check if car hits boundery
             if position[0] >= self.track.shape[0] or position[1] >= self.track.shape[1]:
                 position = self.random_start_position()
+#                print('Outside track cells!')
                 continue
 
+            # Check if car is in is black cells (outside track)
             new_grid_position = rt.track[position[0], position[1]]
             if new_grid_position == 0:
+                #                print('Car hit track boundery!')
                 position = self.random_start_position()
                 continue
 
         print('Steps {}'.format(step))
+#        print(all_remaining_positions)
 
         G = self._get_G_values(
             first_occurence_dict=first_occurence, total_steps=step)
@@ -173,6 +178,7 @@ class RaceTrack:
             if y <= self.track.shape[0] - 1 and x <= self.track.shape[1] - 1:
                 grid_values.append(rt.track[y, x])
 
+        # Goal cell type
         if 2 in grid_values:
             return True
         else:
@@ -194,28 +200,23 @@ class RaceTrack:
         """
 
         # Action coordinates in probability matrix
-        array = np.array(['(0, 0)',
-                          '(0, 1)',
-                          '(0, 2)',
-                          '(1, 0)',
-                          '(1, 1)',
-                          '(1, 2)',
-                          '(2, 0)',
-                          '(2, 1)',
-                          '(2, 2)'])
+        array = [[0, 0],
+                 [0, 1],
+                 [0, 2],
+                 [1, 0],
+                 [1, 1],
+                 [1, 2],
+                 [2, 0],
+                 [2, 1],
+                 [2, 2]]
 
         # Randomly pick action
-        a = numpy_random.choice(array,
-                                size=1,
-                                p=rt.pi_probabilities[state[0], state[1], state[2], state[3]].flatten())
-        a = eval(list(a)[0])
+        idx = numpy_random.choice(range(9),
+                                  size=1,
+                                  p=rt.pi_probabilities[state[0], state[1], state[2], state[3]].flatten())
 
-        return self.center_axis_around_zero(coordinates=a, list_range=range(3))
-
-    def center_axis_around_zero(self, coordinates, list_range):
-        """
-        """
-        return [x - len(list_range) if x > len(list_range)/2 else x for x in coordinates]
+        # Translate back to range -1, 1 and return result
+        return [acc if acc <= 1 else 1 - acc for acc in array[idx[0]]]
 
     def greedy_action(self, state, possible_actions):
         """
@@ -236,7 +237,8 @@ class RaceTrack:
                 q_max = value
                 greedy_action = action
 
-        return self.center_axis_around_zero(coordinates=greedy_action, list_range=range(3))
+        # Translate back to range -1, 1 and return result
+        return [acc if acc <= 1 else 1 - acc for acc in greedy_action]
 
     def epsilon_soft_policy(self, action, greedy_action, all_state_actions):
         """
@@ -340,7 +342,6 @@ class RaceTrack:
         """
         """
         # Initialize policy
-        # NB: limit actions depending on action
         pi_probabilities = np.zeros((track.shape[0],
                                      track.shape[1],
                                      velocity_range,
